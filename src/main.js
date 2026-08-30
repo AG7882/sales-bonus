@@ -5,7 +5,9 @@
  * @returns {number}
  */
 function calculateSimpleRevenue(purchase, _product) {
-   // @TODO: Расчет выручки от операции
+  const { discount, sale_price, quantity } = purchase;
+  let localDiscount = 1 - discount / 100;
+  return sale_price * quantity * localDiscount;
 }
 
 /**
@@ -16,7 +18,19 @@ function calculateSimpleRevenue(purchase, _product) {
  * @returns {number}
  */
 function calculateBonusByProfit(index, total, seller) {
-    // @TODO: Расчет бонуса от позиции в рейтинге
+  let bonus = 0;
+  let profit = seller.profit;
+  if (index === 0) {
+    bonus = profit * 0.15;
+  } else if (index === 1 || index === 2) {
+    bonus = profit * 0.1;
+  } else if (index === total - 1) {
+    bonus = 0;
+  } else {
+    bonus = profit * 0.05;
+  }
+
+  return bonus;
 }
 
 /**
@@ -26,19 +40,95 @@ function calculateBonusByProfit(index, total, seller) {
  * @returns {{revenue, top_products, bonus, name, sales_count, profit, seller_id}[]}
  */
 function analyzeSalesData(data, options) {
-    // @TODO: Проверка входных данных
+  if (
+    !data ||
+    !Array.isArray(data.customers) ||
+    !Array.isArray(data.products) ||
+    !Array.isArray(data.sellers) ||
+    !Array.isArray(data.purchase_records) ||
+    data.customers.length === 0 ||
+    data.products.length === 0 ||
+    data.sellers.length === 0 ||
+    data.purchase_records.length === 0
+  ) {
+    throw new Error("Некорректные входные данные");
+  }
 
-    // @TODO: Проверка наличия опций
+  const { calculateRevenue, calculateBonus } = options;
+  if (!calculateRevenue || !calculateBonus) {
+    throw new Error("Чего-то не хватает");
+  }
+  if (typeof calculateRevenue !== "function") {
+    throw new Error("calculateRevenue должна быть функцией");
+  }
 
-    // @TODO: Подготовка промежуточных данных для сбора статистики
+  try {
+    const productsMap = new Map();
+    for (const product of data.products) {
+      productsMap.set(product.id, product);
+    }
+  } catch (error) {
+    console.error("Переданы некорректные опции:", error);
+  }
 
-    // @TODO: Индексация продавцов и товаров для быстрого доступа
+  const sellerStats = data.sellers.map((seller) => ({
+    id: seller.id,
+    name: `${seller.first_name} ${seller.last_name}`,
+    revenue: 0,
+    profit: 0,
+    sales_count: 0,
+    products_sold: {},
+  }));
 
-    // @TODO: Расчет выручки и прибыли для каждого продавца
+  const sellerIndex = Object.fromEntries(
+    sellerStats.map((stat) => [stat.id, stat]),
+  );
 
-    // @TODO: Сортировка продавцов по прибыли
+  const productIndex = Object.fromEntries(
+    data.products.map((product) => [product.sku, product]),
+  );
 
-    // @TODO: Назначение премий на основе ранжирования
+  data.purchase_records.forEach((record) => {
+    const seller = sellerIndex[record.seller_id];
+    seller.sales_count++;
+    seller.revenue += record.total_amount;
 
-    // @TODO: Подготовка итоговой коллекции с нужными полями
+    record.items.forEach((item) => {
+      const product = productIndex[item.sku];
+      const cost = product.purchase_price * item.quantity;
+      const revenue = calculateSimpleRevenue({
+        sale_price: item.sale_price,
+        quantity: item.quantity,
+        discount: item.discount,
+      });
+      const profit = revenue - cost;
+      seller.profit += profit;
+
+      if (!seller.products_sold[item.sku]) {
+        seller.products_sold[item.sku] = 0;
+      }
+      seller.products_sold[item.sku] += item.quantity;
+    });
+  });
+
+  sellerStats.sort((a, b) => b.revenue - a.revenue);
+
+  const total = sellerStats.length;
+  sellerStats.forEach((seller, index) => {
+    seller.bonus = calculateBonusByProfit(index, total, seller);
+    seller.top_products = Object.entries(seller.products_sold)
+      .map(([sku, quantity]) => ({ sku, quantity }))
+      .sort((a, b) => b.quantity - a.quantity)
+      .slice(0, 10);
+  });
+  return sellerStats.map((seller) => ({
+    seller_id: seller.id,
+    name: seller.name,
+    revenue: +seller.revenue.toFixed(2),
+    profit: +seller.profit.toFixed(2),
+    sales_count: seller.sales_count,
+    top_products: seller.top_products,
+
+    bonus: +seller.bonus.toFixed(2),
+  }));
 }
