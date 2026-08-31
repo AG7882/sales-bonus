@@ -111,7 +111,7 @@ function analyzeSalesData(data, options) {
     });
   });
 
-  sellerStats.sort((a, b) => b.revenue - a.revenue);
+  sellerStats.sort((a, b) => b.profit - a.profit);
 
   const total = sellerStats.length;
   sellerStats.forEach((seller, index) => {
@@ -121,6 +121,9 @@ function analyzeSalesData(data, options) {
       .sort((a, b) => b.quantity - a.quantity)
       .slice(0, 10);
   });
+
+  //sellerStats.sort((a, b) => b.bonus - a.bonus);
+
   return sellerStats.map((seller) => ({
     seller_id: seller.id,
     name: seller.name,
